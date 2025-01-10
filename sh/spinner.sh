@@ -3,7 +3,7 @@
 function _spinner() {
     case $1 in
         start)
-            let column=$(tput cols)-${#2}-8
+            let column=$(tput cols)-${#2}
             echo -ne ${2}
             printf "%${column}s"
 
