@@ -11,28 +11,30 @@ function _spinner() {
             i=0
             delay=${SPINNER_DELAY:-0.15}
 
+            # &로 돌리지 말고 바로 여기에 대기 중인 명령어 실행
             while :
             do
-                # 스피너 회전
                 printf "\b${sp:i++%${#sp}:1}"
                 sleep $delay
-            done
+            done &
+            # Back up the PID so that we can kill the spinner process later
+            echo $! > .spinner_pid
             ;;
         stop)
-            if [[ -z ${3} ]]; then
+            if [[ -f .spinner_pid ]]; then
+                # Kill spinner's background process using PID from file
+                kill $(cat .spinner_pid) > /dev/null 2>&1
+                rm .spinner_pid
+
+                echo -en "\b${bold}["
+                if [[ $2 -eq 0 ]]; then
+                    echo -e "${on_success}${bold}]${nc}"
+                else
+                    echo -e "${on_fail}${bold}]${nc}"
+                fi
+            else
                 echo "Spinner is not running.."
                 exit 1
-            fi
-
-            kill $3 > /dev/null 2>&1
-
-            echo -en "\b${bold}["
-            if [[ $2 -eq 0 ]]; then
-                echo -en "${on_success}"
-		echo -e "${bold}]${nc}"
-            else
-                echo -en "${on_fail}"
-		echo -e "${bold}]${nc}"
             fi
             ;;
         *)
@@ -43,15 +45,9 @@ function _spinner() {
 }
 
 function start_spinner {
-    # 스피너 시작 함수
-    _spinner "start" "${1}" &
-    _sp_pid=$!
-    disown
+    _spinner "start" "${1}"
 }
 
 function stop_spinner {
-    # 스피너 멈춤 함수
-    _spinner "stop" "$1" "$_sp_pid" "$2"
-    unset _sp_pid
+    _spinner "stop" "$1" "$2"
 }
-

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-source "$(pwd)/sh/color.sh"
-source "$(pwd)/sh/spinner.sh"
-source "$(pwd)/sh/utils.sh"
+source "$(pwd)/sh/index.sh"
 
 echo -e "${bold}${purple}                                 ___.                  .__           .__                               ${nc}"
 echo -e "${bold}${purple}                      ____ _____ \\_ |__   ____   _____ |  |__ _____  |  | _____    ____    ____        ${nc}"
@@ -25,88 +23,73 @@ echo -e "${bold}${purple}                                                       
 echo
 echo
 
-echo -e "${blue}${bold}Build Scripts expressvpn containers${nc}"
-echo
+# Display title
+echo -e "${bold}${purple}ExpressVPN Docker Build Script${nc}\n"
 
-start_spinner "${yellow}${bold}> Get Build id${nc}"
+# Introduction message
+echo -e "${blue}${bold}Building ExpressVPN Docker Containers${nc}\n"
+
+set +e
+
+# Generate and display build ID
+start_spinner "${yellow}${bold}> Generating Build ID...${nc}"
 sleep 1
-build="$(printf '%x' `date +%s`)"
+build="$(printf '%x' $(date +%s))"
 stop_spinner $?
-if [ $? -eq 0 ]; then
-  echo -e "${green}[+] build id : ${build}${nc}"
-fi
+[[ $? -eq 0 ]] && echo -e "${green}[+] Build ID: ${build}${nc}"
 
-start_spinner "${yellow}${bold}> Get the docker container tag...${nc}"
+# Define and display Docker tag
+start_spinner "${yellow}${bold}> Generating Docker container tag...${nc}"
 sleep 1
 tag="3.80.0.${build}"
 stop_spinner $?
-if [ $? -eq 0 ]; then
-  echo -e "${green}[+] Docker container tag : ${tag}${nc}"
-fi
+[[ $? -eq 0 ]] && echo -e "${green}[+] Docker container tag: ${tag}${nc}"
 
-
-start_spinner "${yellow}${bold}> Check expessVPN activation code...${nc}"
+# Validation and input for ExpressVPN activation code
+start_spinner "${yellow}${bold}> Validating ExpressVPN activation code...${nc}"
 sleep 1
-if [ -z "$ACTIVATION_CODE" ]; then
-    stop_spinner -1
-    echo -e "${bold}${red}[-] expressVPN ACTIVATION_CODE environment is not set!${nc}"
-    echo -en "${cyan}>> Please enter your expressVPN ACTIVATION CODE: ${nc}"
+if [[ -z "$ACTIVATION_CODE" ]]; then
+  stop_spinner -1
+  prompt_hidden_input "${cyan}>> Enter your ExpressVPN ACTIVATION CODE: ${nc}" "activation_code"
 
-    activation_code=""
-    while IFS= read -r -s -n1 char; do
-        if [[ $char == $'\0' ]] || [[ $char == $'\n' ]]; then
-            break
-        fi
-        if [[ $char == $'\177' ]]; then
-            if [[ -n $activation_code ]]; then
-                activation_code=${activation_code%?}
-                printf '\b \b'
-            fi
-        else
-            activation_code+="$char"
-            printf '*'
-        fi
-    done
-    echo  
-
-    if [ -z "$activation_code" ]; then
-        echo -e "${bold}${red}[-] No ACTIVATION_CODE provided. Exiting.${nc}"
-        exit 1
-    else
-        echo -e "${bold}${green}[+] expressVPN ACTIVATION CODE captured successfully.${nc}"
-    fi
-
-    export ACTIVATION_CODE="$activation_code"
+  if [[ -z "$activation_code" ]]; then
+      echo -e "${red}[-] No ACTIVATION_CODE provided. Exiting.${nc}"
+      exit 1
+  else
+      echo -e "${green}[+] ExpressVPN ACTIVATION CODE captured successfully.${nc}"
+      export ACTIVATION_CODE="$activation_code"
+      stop_spinner 0
+  fi
 else
-    stop_spinner 0
-    echo -e "${bold}${green}[+] expressVPN ACTIVATION CODE captured successfully.${nc}"
+  stop_spinner 0
+  echo -e "${green}[+] ExpressVPN ACTIVATION CODE captured successfully.${nc}"
 fi
 
-start_spinner "${yellow}${bold}> Creating Dockerfile with information...${nc}"
+# Create Dockerfile
+start_spinner "${yellow}${bold}> Creating Dockerfile...${nc}"
 sleep 1
-cat > Dockerfile <<EOF
+cat > Dockerfile << 'EOF'
 FROM debian:bookworm-slim AS expressvpn-base
 
 LABEL maintainer="op@nabomhalang.co.kr"
 
 # Set environment variables
-ENV VPN_ACTIVE_CODE=$ACTIVATION_CODE
+ENV VPN_ACTIVE_CODE=Code
 ENV LOCATION=smart
 ENV PREFERRED_PROTOCOL=auto
 ENV LIGHTWAY_CIPHER=auto
 
-ARG APP=expressvpn_3.81.0.2-1_amd64.deb  # Ensure the architecture matches the base image
+ARG APP=expressvpn_3.81.0.2-1_amd64.deb
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libterm-readkey-perl ca-certificates wget expect iproute2 iputils-ping curl procps libnm0 iptables \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget -q "https://www.expressvpn.works/clients/linux/${APP}" -O /tmp/${APP} \
-    && dpkg -i /tmp/${APP} \
-    && rm -rf /tmp/*.deb \
-    && apt-get purge -y --auto-remove wget
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libterm-readkey-perl ca-certificates wget expect iproute2 iputils-ping curl procps libnm0 iptables && \
+    wget -q "https://www.expressvpn.works/clients/linux/${APP}" -O /tmp/${APP} && \
+    dpkg -i /tmp/${APP} && \
+    rm -rf /var/lib/apt/lists/* /tmp/*.deb && \
+    apt-get purge -y --auto-remove wget
 
 COPY entrypoint.sh /tmp/entrypoint.sh
-COPY codeActivation.sh /tmp/codeActivation.sh
 
 ENTRYPOINT ["/bin/bash", "/tmp/entrypoint.sh"]
 
@@ -115,20 +98,62 @@ FROM expressvpn-base AS expressvpn-wo-iptables
 RUN apt-get remove -y iptables
 EOF
 stop_spinner $?
+[[ $? -eq 0 ]] && echo -e "${green}[+] Dockerfile created successfully.${nc}"
 
-if [ $? -eq 0 ]; then
-  echo -e "${bold}${green}[+] Dockerfile created successfully with the provided ACTIVATION_CODE.${nc}"
+# Build Docker image
+start_spinner "${yellow}${bold}> Building Docker image...${nc}"
+docker build --pull --no-cache --rm --force-rm -f Dockerfile -t expressvpn:${tag} .
+if [[ $? -eq 0 ]]; then
+  stop_spinner 0
+  echo -e "${green}[+] Successfully created ExpressVPN Docker image.${nc}"
+else
+  stop_spinner 1
+  echo -e "${bold}${red}[-] Error occurred during Docker image build.${nc}"
+  exit 1
 fi
 
+# Remove existing test container if any
+start_spinner "${yellow}${bold}> Remove test container if it is already running...${nc}"
+if docker ps -a | grep -q expressvpn-na; then
+  docker stop expressvpn-na && docker rm expressvpn-na
+fi
+stop_spinner $?
 
-start_spinner "${yellow}${bold}> Build the docker image...${nc}"
-sleep 1
-docker build --pull --no-cache --rm --force-rm -f Dockerfile -t expressvpn:${tag} .
-if [ $? -eq 0 ]; then
-  stop_spinner $?
-  echo -e "${bold}${green}[+] Create expressvpn image successfully.${nc}"
+# Run Testing expressvpn container
+start_spinner "${yellow}${bold}> Run testing expressVPN container...${nc}"
+docker run \
+    --env=ACTIVATION_CODE=${ACTIVATION_CODE} \
+    --cap-add=NET_ADMIN \
+    --device=/dev/net/tun \
+    --privileged \
+    --detach=true \
+    --tty=true \
+    --name=expressvpn-na \
+    expressvpn:${tag} \
+    /bin/bash
+run_status=$?
+stop_spinner $run_status
+if [[ $run_status -eq 0 ]]; then
+  echo -e "${green}[+] Successfully ran the expressVPN container.${nc}"
 else
-  stop_spinner $?
-  echo -e "${bold}${red}[-] An error occurred during docker image build.${nc}"
+  echo -e "${bold}${red}[-] Error occurred while running expressVPN container.${nc}"
+  exit 1
+fi 
+
+# Wait for 20 seconds to give the container time to initialize
+start_spinner "${yellow}${bold}> Waiting 20 seconds for the container to initialize...${nc}"
+sleep 20
+stop_spinner 0
+
+# Execute the command to check the status of the expressVPN
+start_spinner "${yellow}${bold}> Checking the status of the expressVPN...${nc}"
+status="$(docker exec -i expressvpn-na expressvpn status)"
+check_status=$?
+stop_spinner $check_status
+if [[ $check_status -eq 0 ]]; then
+  echo -e "${green}[+] expressVPN status fetched successfully:${nc}"
+  echo "$status"
+else
+  echo -e "${bold}${red}[-] Failed to fetch expressVPN status.${nc}"
   exit 1
 fi
