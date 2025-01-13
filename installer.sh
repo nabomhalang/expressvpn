@@ -50,15 +50,14 @@ start_spinner "${yellow}${bold}> Validating ExpressVPN activation code...${nc}"
 sleep 1
 if [[ -z "$ACTIVATION_CODE" ]]; then
   stop_spinner -1
-  prompt_hidden_input "${cyan}>> Enter your ExpressVPN ACTIVATION CODE: ${nc}" "activation_code"
+  prompt_hidden_input "${cyan}>> Enter your ExpressVPN ACTIVATION CODE: ${nc}" ACTIVATION_CODE
 
-  if [[ -z "$activation_code" ]]; then
+  if [[ -z "$ACTIVATION_CODE" ]]; then
       echo -e "${red}[-] No ACTIVATION_CODE provided. Exiting.${nc}"
       exit 1
   else
       echo -e "${green}[+] ExpressVPN ACTIVATION CODE captured successfully.${nc}"
-      export ACTIVATION_CODE="$activation_code"
-      stop_spinner 0
+      export ACTIVATION_CODE=$ACTIVATION_CODE
   fi
 else
   stop_spinner 0
@@ -89,7 +88,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/*.deb && \
     apt-get purge -y --auto-remove wget
 
-COPY entrypoint.sh /tmp/entrypoint.sh
+COPY ./docker/entrypoint.sh /tmp/entrypoint.sh
+COPY ./docker/activateCode.sh /tmp/activateCode.sh
 
 ENTRYPOINT ["/bin/bash", "/tmp/entrypoint.sh"]
 
@@ -102,7 +102,7 @@ stop_spinner $?
 
 # Build Docker image
 start_spinner "${yellow}${bold}> Building Docker image...${nc}"
-docker build --pull --no-cache --rm --force-rm -f Dockerfile -t expressvpn:${tag} .
+docker build --pull --no-cache --rm --force-rm -f Dockerfile -t expressvpn:${tag} . 
 if [[ $? -eq 0 ]]; then
   stop_spinner 0
   echo -e "${green}[+] Successfully created ExpressVPN Docker image.${nc}"
@@ -115,7 +115,7 @@ fi
 # Remove existing test container if any
 start_spinner "${yellow}${bold}> Remove test container if it is already running...${nc}"
 if docker ps -a | grep -q expressvpn-na; then
-  docker stop expressvpn-na && docker rm expressvpn-na
+  docker stop expressvpn-na && docker rm expressvpn-na > /dev/null
 fi
 stop_spinner $?
 
@@ -130,7 +130,7 @@ docker run \
     --tty=true \
     --name=expressvpn-na \
     expressvpn:${tag} \
-    /bin/bash
+    /bin/bash > /dev/null
 run_status=$?
 stop_spinner $run_status
 if [[ $run_status -eq 0 ]]; then
@@ -151,9 +151,13 @@ status="$(docker exec -i expressvpn-na expressvpn status)"
 check_status=$?
 stop_spinner $check_status
 if [[ $check_status -eq 0 ]]; then
-  echo -e "${green}[+] expressVPN status fetched successfully:${nc}"
+  echo -e "${green}[+] expressVPN status fetched successfully ${nc}"
   echo "$status"
 else
   echo -e "${bold}${red}[-] Failed to fetch expressVPN status.${nc}"
   exit 1
 fi
+
+start_spinner "${yellow}${bold}> Please select the country to which you want to connect your VPN. ${NC}"
+sleep 1
+stop_spinner $?

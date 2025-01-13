@@ -1,8 +1,5 @@
 function prompt_hidden_input() {
-    local prompt_message=$1
-    local input_variable_name=$2
-    
-    echo -en "${prompt_message}"
+    echo -en $1
 
     local input=""
     
@@ -23,5 +20,8 @@ function prompt_hidden_input() {
     done
     echo
 
-    export $input_variable_name="$input"
+    printf -v "$2" '%s' "$input"
 }
+
+# function prompt_input() {
+# }

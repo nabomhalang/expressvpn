@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# Activate ExpressVPN using expect
-/usr/bin/expect <<EOF
-  spawn expressvpn activate
-  expect "code:"
-  send "$ACTIVATION_CODE\r"
-  expect "information."
-  send "n\r"
-  expect eof
-EOF
-
 # Back up the resolv.conf
 cp /etc/resolv.conf /tmp/resolv.conf
 
@@ -22,6 +12,11 @@ sed -i 's/DAEMON_ARGS=.*/DAEMON_ARGS=""/' /etc/init.d/expressvpn
 
 # Restart expressvpn service
 service expressvpn restart
+
+# Activate ExpressVPN using expect
+/usr/bin/expect /tmp/activateCode.sh
+
+sleep 3
 
 # Set ExpressVPN preferences
 expressvpn preferences set auto_connect true
